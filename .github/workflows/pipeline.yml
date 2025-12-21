@@ -44,35 +44,37 @@ jobs:
 
   # TRABAJO 3: DESPLIEGUE A PRODUCCIÓN (CD)
   deploy:
-    needs: [build-and-test, security-scan] # Solo despliega si todo está OK y seguro
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' # Solo despliega si estamos en la rama main
     steps:
-      - name: Desplegar en servidor Linux
+      - uses: actions/checkout@v3
+
+      - name: Instalar Go en el runner
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+
+      - name: Compilar el binario (Linux AMD64)
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o mi-servidor-web .
+
+      - name: Enviar binario y ejecutar
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 55000
+          source: "mi-servidor-web,static/"
+          target: "app"
+
+      - name: Arrancar aplicación vía SSH
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
-          password: ${{ secrets.SERVER_PASSWORD }} # Usa key: ${{ secrets.SERVER_KEY }} si usas clave .pem
+          password: ${{ secrets.SERVER_PASSWORD }}
           port: 55000
           script: |
-            # 1. Comprobamos si es la primera vez, carpeta no existe
-            if [ ! -d "app" ]; then
-              echo "La carpeta no existe. Clonando repositorio por primera vez..."
-              git clone https://github.com/eprohias-coder/fp351R4.git app
-            fi
-            
-            # 2. Entramos en la carpeta
             cd app
-            
-            # 3. Descargamos cambios
-            git pull origin main
-            
-            # 4. Compilamos
-            /usr/local/go/bin/go build -v -o mi-servidor-web . || go build -v -o mi-servidor-web .
-            
-            # 5. Reiniciamos la app
+            chmod +x mi-servidor-web
             pkill mi-servidor-web || true
             nohup ./mi-servidor-web > server.log 2>&1 &
-            
-            echo "¡Despliegue completado con éxito!"
