@@ -54,6 +54,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }} # Usa key: ${{ secrets.SERVER_KEY }} si usas clave .pem
+          port: 55000
           script: |
             # 1. Comprobamos si es la primera vez (carpeta no existe)
             if [ ! -d "app" ]; then
