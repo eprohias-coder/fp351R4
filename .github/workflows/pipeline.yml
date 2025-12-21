@@ -54,21 +54,25 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }} # Usa key: ${{ secrets.SERVER_KEY }} si usas clave .pem
+          port: 55000
           script: |
-            # Entramos en la carpeta
+            # 1. Comprobamos si es la primera vez, carpeta no existe
+            if [ ! -d "app" ]; then
+              echo "La carpeta no existe. Clonando repositorio por primera vez..."
+              git clone https://github.com/eprohias-coder/fp351R4.git app
+            fi
+            
+            # 2. Entramos en la carpeta
             cd app
             
-            # Descargamos los últimos cambios de GitHub
+            # 3. Descargamos cambios
             git pull origin main
             
-            # Compilamos la app de nuevo en el servidor real
-            go build -v -o mi-servidor-web .
+            # 4. Compilamos
+            /usr/local/go/bin/go build -v -o mi-servidor-web . || go build -v -o mi-servidor-web .
             
-            # Matamos la app antigua si está corriendo (ignoramos error si no existe)
+            # 5. Reiniciamos la app
             pkill mi-servidor-web || true
-            
-            # Arrancamos la nueva versión en segundo plano (nohup)
-            # El " > /dev/null 2>&1 &" es para que no se quede bloqueada la terminal
             nohup ./mi-servidor-web > server.log 2>&1 &
             
-            echo "¡Despliegue completado! App corriendo en segundo plano."
+            echo "¡Despliegue completado con éxito!"
