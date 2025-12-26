@@ -1,33 +1,48 @@
 package main
 
 import (
-	"fmt"
-	"log"
-	"net/http"
-	"time" // Importamos la librería de tiempo
+        "fmt"
+        "log"
+        "net/http"
+        "time"
 )
 
 func main() {
-	// Servir archivos estáticos
-	fs := http.FileServer(http.Dir("./static"))
-	http.Handle("/", fs)
+        // Servir archivos estáticos bajo /static
+        fs := http.FileServer(http.Dir("./static"))
+        http.Handle("/static/", http.StripPrefix("/static/", fs))
 
-	fmt.Println("Servidor seguro escuchando en el puerto 8080...")
+        // Ruta raíz que muestra la imagen
+        http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+                // LOG: registrar petición con timestamp
+                log.Printf("[%s] %s %s %s\n", time.Now().Format(time.RFC3339), r.RemoteAddr, r.Method, r.URL.Path)
 
-	// CONFIGURACIÓN SEGURA
-	// En lugar de usar ListenAndServe directamente, configuramos un servidor con límites
-	server := &http.Server{
-		Addr:         ":8080",
-		Handler:      nil,
-		ReadTimeout:  10 * time.Second, // Máximo 10 seg para leer
-		WriteTimeout: 10 * time.Second, // Máximo 10 seg para responder
-		// Esto evita ataques de denegación de servicio (Slowloris)
-	}
+                w.Header().Set("Content-Type", "text/html; charset=utf-8")
+                fmt.Fprintln(w, `
+                        <!DOCTYPE html>
+                        <html>
+                        <head><title>Aplicación Go</title></head>
+                        <body>
+                                <h1>Aplicación Go desplegada</h1>
+                                <img src="/static/uocimatge.jpeg" alt="Imagen">
+                        </body>
+                        </html>
+                `)
+        })
 
-	err := server.ListenAndServe()
-	if err != nil {
-		log.Fatal(err)
-	}
+        fmt.Println("Servidor seguro escuchando en el puerto 8080...")
+
+        // CONFIGURACIÓN SEGURA
+        server := &http.Server{
+                Addr:         ":8080",
+                Handler:      nil,
+                ReadTimeout:  10 * time.Second,
+                WriteTimeout: 10 * time.Second,
+        }
+
+        // LOG: registrar errores graves
+        err := server.ListenAndServe()
+        if err != nil {
+                log.Fatalf("[%s] ERROR: %v\n", time.Now().Format(time.RFC3339), err)
+        }
 }
-
-//Final Check
