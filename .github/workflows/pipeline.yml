@@ -58,9 +58,10 @@ jobs:
               git clone https://github.com/eprohias-coder/fp351R4.git app
             fi
             cd app
-            git fetch --all
+            git fetch origin
             git checkout develop
-            git pull origin develop
+            git reset --hard origin/develop
+            git clean -fd
             docker compose up -d --build
             docker ps
 
@@ -83,8 +84,9 @@ jobs:
               git clone https://github.com/eprohias-coder/fp351R4.git app
             fi
             cd app
-            git fetch --all
+            git fetch origin
             git checkout main
-            git pull origin main
+            git reset --hard origin/main
+            git clean -fd
             docker compose up -d --build
             docker ps
