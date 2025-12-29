@@ -1,78 +1,92 @@
 name: Pipeline DevSecOps
 
-# ¿Cuándo se ejecuta?
-# 1. Cuando alguien hace Push a la rama main o develop
-# 2. Cuando alguien abre un Pull Request hacia main
 on:
   push:
     branches: [ "main", "develop" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "develop" ]
 
 jobs:
-  # TRABAJO 1: CONSTRUIR Y PROBAR (Build & Test)
   build-and-test:
+    name: Build & Test (Go)
     runs-on: ubuntu-latest
     steps:
-    - name: 1. Descargar el código (Checkout)
-      uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: 2. Instalar Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.20'
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
 
-    - name: 3. Ejecutar Tests (Pruebas)
-      run: go test -v ./...
+      - name: Run tests
+        run: go test -v ./...
 
-    - name: 4. Construir la aplicación (Build)
-      run: go build -v ./...
+      - name: Build binary
+        run: go build -v -o webapp .
 
-  # TRABAJO 2: ANÁLISIS DE SEGURIDAD (SAST)
   security-scan:
+    name: SAST (gosec)
     runs-on: ubuntu-latest
-    needs: build-and-test # Solo se ejecuta si lo anterior salió bien
+    needs: build-and-test
     steps:
-    - name: Descargar código
-      uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Ejecutar Gosec (Escáner de Seguridad)
-      uses: securego/gosec@master
-      with:
-        # Escaneamos todo el código
-        args: ./...
+      - name: Run gosec
+        uses: securego/gosec@master
+        with:
+          args: ./...
 
-  # TRABAJO 3: DESPLIEGUE A PRODUCCIÓN (CD)
-  deploy:
-    needs: [build-and-test, security-scan] # Solo despliega si todo está OK y seguro
+  deploy-staging:
+    name: Deploy Staging (Linux 1)
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' # Solo despliega si estamos en la rama main
+    needs: [build-and-test, security-scan]
+    if: github.ref == 'refs/heads/develop'
     steps:
-      - name: Desplegar en servidor Linux
+      - name: Deploy via SSH (docker compose)
         uses: appleboy/ssh-action@v0.1.10
         with:
-          host: ${{ secrets.SERVER_HOST }}
+          host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.SERVER_USER }}
-          password: ${{ secrets.SERVER_PASSWORD }} # Usa key: ${{ secrets.SERVER_KEY }} si usas clave .pem
+          key: ${{ secrets.SERVER_SSH_KEY }}
           port: 55000
           script: |
-            # 1. Comprobamos si es la primera vez, carpeta no existe
+            set -e
             if [ ! -d "app" ]; then
-              echo "La carpeta no existe. Clonando repositorio por primera vez..."
               git clone https://github.com/eprohias-coder/fp351R4.git app
             fi
-            
-            # 2. Entramos en la carpeta
             cd app
-            
-            # 3. Descargamos cambios
-            git pull origin main
-            
-            # 4. Compilamos
-            /usr/local/go/bin/go build -v -o mi-servidor-web . || go build -v -o mi-servidor-web .
-            
-            # 5. Reiniciamos la app
-            pkill mi-servidor-web || true
-            nohup ./mi-servidor-web > server.log 2>&1 &
-            
-            echo "¡Despliegue completado con éxito!"
+            git fetch origin
+            git checkout develop
+            git reset --hard origin/develop
+            git clean -fd
+            docker compose up -d --build
+            docker ps
+
+  deploy-production:
+    name: Deploy Production (Linux 2)
+    runs-on: ubuntu-latest
+    needs: [build-and-test, security-scan]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy via SSH (docker compose)
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: 55000
+          script: |
+            set -e
+            if [ ! -d "app" ]; then
+              git clone https://github.com/eprohias-coder/fp351R4.git app
+            fi
+            cd app
+            git fetch origin
+            git checkout main
+            git reset --hard origin/main
+            git clean -fd
+            docker compose up -d --build
+            docker ps
